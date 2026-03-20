@@ -214,7 +214,7 @@ def run(today: str | None = None) -> str:
     print(f"[brief_generator] Calling {MODEL} with web_search tool...")
     response = client.messages.create(
         model=MODEL,
-        max_tokens=8000,
+        max_tokens=16000,
         system=SYSTEM_PROMPT,
         tools=[{
             "type": "web_search_20250305",
@@ -242,7 +242,7 @@ def run(today: str | None = None) -> str:
         ]
         response = client.messages.create(
             model=MODEL,
-            max_tokens=8000,
+            max_tokens=16000,
             system=SYSTEM_PROMPT,
             tools=[{
                 "type": "web_search_20250305",
