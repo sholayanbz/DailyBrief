@@ -1,0 +1,10 @@
+[build]
+builder = "nixpacks"
+
+# Railway Cron Job — runs weekdays at 4:30 PM ET
+# ET = UTC-5 (EST) or UTC-4 (EDT, March–November)
+# This schedule uses EDT (UTC-4), adjust to "30 21 * * 1-5" in winter (EST/UTC-5)
+[[cronjobs]]
+name    = "daily-brief"
+command = "python main.py"
+schedule = "30 20 * * 1-5"

@@ -1,0 +1,5 @@
+# Email recipients for Daily Brief
+# Add one email address per line
+# Lines starting with # are ignored
+sharif.olayan@gmail.com
+Bdwright77@gmail.com

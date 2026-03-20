@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+/data/
+*.html
+brief-data-*.json
+gex-data.json
+gex-fetcher.log
