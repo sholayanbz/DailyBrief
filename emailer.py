@@ -1,35 +1,32 @@
 #!/usr/bin/env python3
 """
-emailer.py — HTML Email Sender via SendGrid (Railway edition)
-Matches the EmailSender pattern from the watchlist scanner project.
+emailer.py — HTML Email Sender via SMTP
 
 Required env vars:
-  SENDGRID_API_KEY  — your SendGrid API key
-  FROM_EMAIL        — verified sender address (same as scanner project)
-  EMAIL_TO          — comma-separated recipients, e.g. sharif@gmail.com
-                      OR create an emails.txt file with one address per line
+  SMTP_USER      — sender address (e.g. sharif.olayan@gmail.com)
+  SMTP_PASSWORD  — app password
+  SMTP_HOST      — e.g. smtp.gmail.com (default)
+  SMTP_PORT      — e.g. 465 (SSL) or 587 (TLS)
+  FROM_EMAIL     — sender display address (falls back to SMTP_USER)
+  EMAIL_TO       — comma-separated recipients
+                   OR create an emails.txt file with one address per line
 """
 
-import base64
 import os
+import smtplib
+import ssl
 import sys
 from datetime import date
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from pathlib import Path
-
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import (
-    Mail, Attachment, FileContent, FileName, FileType, Disposition
-)
 
 
 def _load_recipients() -> list[str]:
-    """Load recipients from EMAIL_TO env var or emails.txt (same as scanner project)."""
-    # Check env var first
     env_to = os.environ.get("EMAIL_TO", "")
     if env_to:
         return [e.strip() for e in env_to.split(",") if e.strip()]
 
-    # Fall back to emails.txt in the working directory
     emails_file = Path("emails.txt")
     if emails_file.exists():
         emails = []
@@ -44,59 +41,44 @@ def _load_recipients() -> list[str]:
 
 
 def run(html_path: str, subject: str | None = None, attach_file: str | None = None) -> bool:
-    """
-    Send the brief HTML as an email via SendGrid.
-
-    Args:
-        html_path:   Path to the generated HTML brief (sent as email body).
-        subject:     Email subject — auto-generated if None.
-        attach_file: Optional path to attach (e.g. same HTML for download).
-
-    Returns:
-        True if all recipients succeeded, False otherwise.
-    """
-    api_key    = os.environ["SENDGRID_API_KEY"]
-    from_email = os.environ["FROM_EMAIL"]
+    smtp_user = os.environ["SMTP_USER"]
+    smtp_pass = os.environ["SMTP_PASSWORD"]
+    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.environ.get("SMTP_PORT", "465"))
+    from_email = os.environ.get("FROM_EMAIL", smtp_user)
     recipients = _load_recipients()
 
-    today   = date.today().strftime("%B %-d, %Y")
+    today = date.today().strftime("%B %-d, %Y")
     subject = subject or f"Daily Brief — {today}"
 
     with open(html_path, "r", encoding="utf-8") as f:
         html_body = f.read()
 
-    sg = SendGridAPIClient(api_key)
+    use_ssl = smtp_port == 465
+
     all_ok = True
-
     for recipient in recipients:
-        message = Mail(
-            from_email=from_email,
-            to_emails=recipient,
-            subject=subject,
-            html_content=html_body,
-        )
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = from_email
+        msg["To"] = recipient
+        msg.attach(MIMEText(html_body, "html"))
 
-        # Optional attachment (e.g. attach the same HTML for offline viewing)
-        if attach_file and Path(attach_file).exists():
-            try:
-                with open(attach_file, "rb") as f:
-                    encoded = base64.b64encode(f.read()).decode()
-                message.attachment = Attachment(
-                    FileContent(encoded),
-                    FileName(Path(attach_file).name),
-                    FileType("text/html"),
-                    Disposition("attachment"),
-                )
-                print(f"[emailer] Attached {Path(attach_file).name}")
-            except Exception as e:
-                print(f"[emailer] Warning: could not attach file — {e}")
+        try:
+            if use_ssl:
+                context = ssl.create_default_context()
+                with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
+                    server.login(smtp_user, smtp_pass)
+                    server.sendmail(from_email, recipient, msg.as_string())
+            else:
+                with smtplib.SMTP(smtp_host, smtp_port) as server:
+                    server.starttls(context=ssl.create_default_context())
+                    server.login(smtp_user, smtp_pass)
+                    server.sendmail(from_email, recipient, msg.as_string())
 
-        response = sg.send(message)
-
-        if 200 <= response.status_code < 300:
-            print(f"[emailer] ✅ Sent '{subject}' → {recipient} (status {response.status_code})")
-        else:
-            print(f"[emailer] ❌ SendGrid error for {recipient}: {response.status_code} {response.body}")
+            print(f"[emailer] ✅ Sent '{subject}' → {recipient}")
+        except Exception as e:
+            print(f"[emailer] ❌ Failed to send to {recipient}: {e}")
             all_ok = False
 
     return all_ok
