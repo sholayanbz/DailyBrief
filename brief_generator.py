@@ -64,7 +64,13 @@ def _extract_json(content: list) -> str:
         raise ValueError(f"No JSON object found in response. Raw:\n{full_text[:500]}")
 
     json_str = clean[start:end+1]
-    json.loads(json_str)  # validate
+    try:
+        json.loads(json_str)  # validate
+    except json.JSONDecodeError:
+        from json_repair import repair_json
+        print("[brief_generator] Warning: JSON malformed, attempting repair...")
+        json_str = repair_json(json_str)
+        json.loads(json_str)  # validate repaired version
     return json_str
 
 
